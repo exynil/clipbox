@@ -190,8 +190,8 @@ password_mask_char=*
 You can use Pango markup in markers for colors and formatting:
 
 ```ini
-pinned_marker=<span color='#DC2626'>📌</span>
-unpinned_marker=<span color='#6B7280'>○</span>
+pinned_marker=<span color='#DC2626'>*</span>
+unpinned_marker=<span color='#333'>*</span>
 ```
 
 **Note:** After changing preview-related settings (markers, width, password masking), run:
