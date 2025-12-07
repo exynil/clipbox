@@ -21,38 +21,39 @@ const maxFileSize = 12 * 1e6 // 12MB
 // Store reads content from stdin and saves it to the clipboard database.
 // Handles deduplication, icon generation for images, and max items limit.
 func Store() error {
-	db, err := OpenDB()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	currentBuffer, err := GetCurrentBuffer(db)
-	if err != nil {
-		return fmt.Errorf("failed to get current buffer: %w", err)
-	}
-
 	limitedReader := io.LimitReader(os.Stdin, maxFileSize+1)
 	content, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return fmt.Errorf("failed to read stdin: %w", err)
 	}
 	if len(content) > maxFileSize {
-		return fmt.Errorf("content too large: %d bytes (max %d)", len(content), int(maxFileSize))
+		return nil
 	}
 
 	trimmedContent := bytes.TrimSpace(content)
 	if len(trimmedContent) == 0 {
-		return fmt.Errorf("content is empty")
+		return nil
+	}
+
+	// Load config to check MinStoreLength
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	if cfg.MinStoreLength > 0 && len(trimmedContent) < cfg.MinStoreLength {
 		return nil
+	}
+
+	db, err := OpenDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	currentBuffer, err := GetCurrentBuffer(db)
+	if err != nil {
+		return fmt.Errorf("failed to get current buffer: %w", err)
 	}
 
 	// Find and delete duplicates (keep their IDs to delete icon files)
