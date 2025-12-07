@@ -170,8 +170,8 @@ func GeneratePreview(id int, content []byte, isPinned int, hasIcon bool, iconPat
 
 		// Check if content is a password and masking is enabled
 		if cfg.MaskPasswords > 0 && IsPassword(content) {
-			prev = MaskPassword(prev, cfg.MaskPasswords, cfg.PasswordMaskColor, cfg.PasswordMaskChar)
 			prev = utils.Trunc(prev, cfg.PreviewWidth, "…")
+			prev = MaskPassword(prev, cfg.MaskPasswords, cfg.PasswordMaskColor, cfg.PasswordMaskChar)
 		} else {
 			prev = strings.Join(strings.Fields(prev), " ")
 			prev = utils.Trunc(prev, cfg.PreviewWidth, "…")
