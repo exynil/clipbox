@@ -8,137 +8,53 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"regexp"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	_ "image/gif"
 	_ "image/jpeg"
 
 	"clipbox/config"
+	"clipbox/detect"
 	"clipbox/utils"
 )
 
-// emailRegex matches basic email format: something@domain.tld
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+const (
+	maskModeFull    = 2
+	minMaskLength   = 6
+	firstCharsCount = 2
+	lastCharsCount  = 4
+	maxImageSize    = 1024 * 1024
+)
 
-// IsPassword determines if content is likely a password based on heuristics
-func IsPassword(content []byte) bool {
-	if !utf8.Valid(content) {
-		return false
-	}
-
-	text := string(content)
-	text = strings.TrimSpace(text)
-
-	// Check length
-	length := len([]rune(text))
-	if length < 8 || length > 50 {
-		return false
-	}
-
-	// Check for spaces
-	if strings.Contains(text, " ") {
-		return false
-	}
-
-	// Check if it's an email address
-	if emailRegex.MatchString(text) {
-		return false
-	}
-
-	// Check for line breaks
-	if strings.Contains(text, "\n") || strings.Contains(text, "\r") {
-		return false
-	}
-
-	// Check that all characters are printable
-	for _, r := range text {
-		if !unicode.IsPrint(r) {
-			return false
-		}
-	}
-
-	// Check for URL patterns
-	if strings.HasPrefix(text, "http://") || strings.HasPrefix(text, "https://") ||
-		strings.HasPrefix(text, "ws://") || strings.HasPrefix(text, "wss://") ||
-		strings.HasPrefix(text, "ftp://") {
-		return false
-	}
-
-	// Check for file path patterns
-	if strings.Contains(text, "/") && (strings.Count(text, "/") > 2 ||
-		strings.HasPrefix(text, "/") || strings.HasPrefix(text, "./")) {
-		return false
-	}
-
-	if strings.Contains(text, "\\") && strings.Count(text, "\\") > 1 {
-		return false
-	}
-
-	// Check for at least 3 different character types
-	hasLower := false
-	hasUpper := false
-	hasDigit := false
-	hasSpecial := false
-
-	for _, r := range text {
-		if unicode.IsLower(r) {
-			hasLower = true
-		} else if unicode.IsUpper(r) {
-			hasUpper = true
-		} else if unicode.IsDigit(r) {
-			hasDigit = true
-		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			hasSpecial = true
-		}
-	}
-
-	charTypeCount := 0
-	if hasLower {
-		charTypeCount++
-	}
-	if hasUpper {
-		charTypeCount++
-	}
-	if hasDigit {
-		charTypeCount++
-	}
-	if hasSpecial {
-		charTypeCount++
-	}
-
-	// Require at least 3 different character types
-	if charTypeCount < 3 {
-		return false
-	}
-
-	return true
-}
+const (
+	passwordMaskText = "[[ PASSWORD ]]"
+	rofiIconSep      = "\x00icon\x1f"
+	rofiInfoSep      = "\x00info\x1f"
+)
 
 // MaskPassword masks a password based on the masking mode.
-// Mode 1: Shows first 2 and last 3 characters, masks middle with specified color and character.
+// Mode 1: Shows first 2 and last 4 characters, masks middle with specified color and character.
 // Mode 2: Fully masks password as [[ PASSWORD ]]
-// If password is shorter than 5 characters in mode 1, returns it unmasked.
+// If password is shorter than 6 characters in mode 1, returns it unmasked.
 func MaskPassword(password string, mode int, maskColor string, maskChar string) string {
-	if mode == 2 {
-		return "[[ PASSWORD ]]"
+	if mode == maskModeFull {
+		return passwordMaskText
 	}
 
 	// Mode 1: Partial masking
 	runes := []rune(password)
 	length := len(runes)
 
-	// If password is shorter than 5 characters, show it fully
-	if length < 5 {
+	// If password is shorter than minMaskLength characters, show it fully
+	if length < minMaskLength {
 		return password
 	}
 
 	// Extract parts
-	firstPart := string(runes[:2])
-	lastPart := string(runes[length-3:])
-	maskedLength := length - 5
+	firstPart := string(runes[:firstCharsCount])
+	lastPart := string(runes[length-lastCharsCount:])
+	maskedLength := length - (firstCharsCount + lastCharsCount)
 	maskedPart := strings.Repeat(maskChar, maskedLength)
 
 	// Escape parts for Pango markup
@@ -148,52 +64,64 @@ func MaskPassword(password string, mode int, maskColor string, maskChar string) 
 	maskedPartEscaped := utils.PangoReplacer.Replace(maskedPart)
 
 	// Combine with colored mask characters
-	masked := fmt.Sprintf("%s<span color='%s'>%s</span>%s", firstPartEscaped, maskColorEscaped, maskedPartEscaped, lastPartEscaped)
-
-	return masked
+	return fmt.Sprintf("%s<span color='%s'>%s</span>%s",
+		firstPartEscaped, maskColorEscaped, maskedPartEscaped, lastPartEscaped)
 }
 
-// GeneratePreview creates a complete rofi display line with marker, preview text, and metadata
+// GeneratePreview creates a complete rofi display line with marker, preview text, and metadata.
 func GeneratePreview(id int, content []byte, isPinned int, hasIcon bool, iconPath string, cfg *config.Config) string {
-	var previewText string
-
-	limitedReader := io.LimitReader(bytes.NewReader(content), 1024*1024)
-	if imgConfig, format, err := image.DecodeConfig(limitedReader); err == nil {
-		formatUpper := strings.ToUpper(format)
-		previewText = fmt.Sprintf("[[ %s: %dx%d • %s ]]",
-			formatUpper, imgConfig.Width, imgConfig.Height, utils.FormatSize(len(content)))
-	} else if !utf8.Valid(content) {
-		previewText = fmt.Sprintf("[[ BIN: %s ]]", utils.FormatSize(len(content)))
-	} else {
-		prev := string(content)
-		prev = strings.TrimSpace(prev)
-
-		// Check if content is a password and masking is enabled
-		if cfg.MaskPasswords > 0 && IsPassword(content) {
-			prev = utils.Trunc(prev, cfg.PreviewWidth, "…")
-			prev = MaskPassword(prev, cfg.MaskPasswords, cfg.PasswordMaskColor, cfg.PasswordMaskChar)
-		} else {
-			prev = strings.Join(strings.Fields(prev), " ")
-			prev = utils.Trunc(prev, cfg.PreviewWidth, "…")
-			prev = utils.PangoReplacer.Replace(prev)
-		}
-		previewText = prev
-	}
-
-	var marker string
-	if isPinned == 1 {
-		marker = cfg.PinnedMarker
-	} else {
-		marker = cfg.UnpinnedMarker
-	}
-
+	previewText := generatePreviewText(content, cfg)
+	marker := getMarker(isPinned, cfg)
 	preview := marker + " " + previewText
 
 	if hasIcon && iconPath != "" {
 		hiddenID := utils.EncodeIDHidden(id)
-		iconMeta := fmt.Sprintf("\x00icon\x1f%s", iconPath)
-		return fmt.Sprintf("%s%s%s\x00info\x1f%d", preview, hiddenID, iconMeta, id)
+		iconMeta := rofiIconSep + iconPath
+		return fmt.Sprintf("%s%s%s%s%d", preview, hiddenID, iconMeta, rofiInfoSep, id)
 	}
 
-	return fmt.Sprintf("%s\x00info\x1f%d", preview, id)
+	return fmt.Sprintf("%s%s%d", preview, rofiInfoSep, id)
+}
+
+// generatePreviewText generates the preview text based on content type.
+func generatePreviewText(content []byte, cfg *config.Config) string {
+	// Try to decode as image first
+	limitedReader := io.LimitReader(bytes.NewReader(content), maxImageSize)
+	if imgConfig, format, err := image.DecodeConfig(limitedReader); err == nil {
+		formatUpper := strings.ToUpper(format)
+		return fmt.Sprintf("[[ %s: %dx%d • %s ]]",
+			formatUpper, imgConfig.Width, imgConfig.Height, utils.FormatSize(len(content)))
+	}
+
+	// Check if binary content
+	if !utf8.Valid(content) {
+		return fmt.Sprintf("[[ BIN: %s ]]", utils.FormatSize(len(content)))
+	}
+
+	// Process text content
+	return processTextContent(content, cfg)
+}
+
+// processTextContent processes text content, applying password masking if needed.
+func processTextContent(content []byte, cfg *config.Config) string {
+	text := strings.TrimSpace(string(content))
+
+	// Check if content is a password and masking is enabled
+	if cfg.MaskPasswords > 0 && detect.IsPassword(content) {
+		text = utils.Trunc(text, cfg.PreviewWidth, "…")
+		return MaskPassword(text, cfg.MaskPasswords, cfg.PasswordMaskColor, cfg.PasswordMaskChar)
+	}
+
+	// Normal text processing
+	text = strings.Join(strings.Fields(text), " ")
+	text = utils.Trunc(text, cfg.PreviewWidth, "…")
+	return utils.PangoReplacer.Replace(text)
+}
+
+// getMarker returns the appropriate marker based on pinned status.
+func getMarker(isPinned int, cfg *config.Config) string {
+	if isPinned == 1 {
+		return cfg.PinnedMarker
+	}
+	return cfg.UnpinnedMarker
 }
