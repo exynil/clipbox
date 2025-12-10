@@ -24,7 +24,7 @@ import (
 	"clipbox/utils"
 )
 
-const version = "0.1.0"
+const version = "0.1.2"
 
 func main() {
 	// Handle --version and -v flags first
