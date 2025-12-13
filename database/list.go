@@ -98,7 +98,7 @@ func List(limit int) error {
 		if !hasPinnedRows {
 			hasPinnedRows = true
 			if hasRows {
-				separator := strings.Repeat("─", cfg.SeparatorLength)
+				separator := strings.Repeat("—", cfg.SeparatorLength)
 				fmt.Printf("%s\x00info\x1f0\n", separator)
 			}
 		}
