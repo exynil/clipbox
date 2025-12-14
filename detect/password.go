@@ -4,6 +4,7 @@ package detect
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -15,7 +16,7 @@ const (
 )
 
 // IsPassword determines if content is likely a password based on heuristics.
-func IsPassword(content []byte) bool {
+func IsPassword(content []byte, ignorePatterns []string) bool {
 	text, ok := validateAndTrim(content)
 	if !ok {
 		return false
@@ -109,6 +110,18 @@ func IsPassword(content []byte) bool {
 	// Require at least minCharTypes different character types
 	if charTypeCount < minCharTypes {
 		return false
+	}
+
+	// Check user-defined ignore patterns
+	for _, pattern := range ignorePatterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			// Skip invalid regex patterns
+			continue
+		}
+		if re.MatchString(text) {
+			return false
+		}
 	}
 
 	return true
