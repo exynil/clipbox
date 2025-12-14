@@ -15,20 +15,21 @@ import (
 const configFile = "config.conf"
 
 type Config struct {
-	Limit             int
-	PinnedMarker      string
-	UnpinnedMarker    string
-	BufferNames       [5]string // Names for buffers 1-5
-	SeparatorLength   int       // Length of separator between regular and pinned entries
-	MaxDedupeSearch   int       // Maximum number of recent entries to check for duplicates
-	MaxItems          int       // Maximum number of items to store (0 = unlimited)
-	MinStoreLength    int       // Minimum number of characters to store
-	DBPath            string    // Path to database (empty = use default)
-	PreviewWidth      int       // Maximum number of characters to preview
-	ShowImageIcons    bool      // Show image icons in rofi (default: true)
-	MaskPasswords     int       // Password masking mode: 0 = no masking, 1 = partial, 2 = full (default: 0)
-	PasswordMaskColor string    // Color for masked password characters (default: "red")
-	PasswordMaskChar  string    // Character used for masking passwords (default: "*")
+	Limit                  int
+	PinnedMarker           string
+	UnpinnedMarker         string
+	BufferNames            [5]string // Names for buffers 1-5
+	SeparatorLength        int       // Length of separator between regular and pinned entries
+	MaxDedupeSearch        int       // Maximum number of recent entries to check for duplicates
+	MaxItems               int       // Maximum number of items to store (0 = unlimited)
+	MinStoreLength         int       // Minimum number of characters to store
+	DBPath                 string    // Path to database (empty = use default)
+	PreviewWidth           int       // Maximum number of characters to preview
+	ShowImageIcons         bool      // Show image icons in rofi (default: true)
+	MaskPasswords          int       // Password masking mode: 0 = no masking, 1 = partial, 2 = full (default: 0)
+	PasswordMaskColor      string    // Color for masked password characters (default: "red")
+	PasswordMaskChar       string    // Character used for masking passwords (default: "*")
+	PasswordIgnorePatterns []string  // Regex patterns to exclude from password detection
 }
 
 // GetConfigPath returns the path to the config file.
@@ -50,20 +51,21 @@ func GetConfigPath() (string, error) {
 // Returns default values if config file doesn't exist or on error.
 func LoadConfig() (*Config, error) {
 	config := &Config{
-		Limit:             500,
-		PinnedMarker:      "",
-		UnpinnedMarker:    "",
-		BufferNames:       [5]string{"", "", "", "", ""},
-		SeparatorLength:   66,
-		MaxDedupeSearch:   100,
-		MaxItems:          500,
-		MinStoreLength:    0,
-		DBPath:            "",
-		PreviewWidth:      65,
-		ShowImageIcons:    false,
-		MaskPasswords:     0,
-		PasswordMaskColor: "#DC2626",
-		PasswordMaskChar:  "*",
+		Limit:                  500,
+		PinnedMarker:           "",
+		UnpinnedMarker:         "",
+		BufferNames:            [5]string{"", "", "", "", ""},
+		SeparatorLength:        66,
+		MaxDedupeSearch:        100,
+		MaxItems:               500,
+		MinStoreLength:         0,
+		DBPath:                 "",
+		PreviewWidth:           65,
+		ShowImageIcons:         false,
+		MaskPasswords:          0,
+		PasswordMaskColor:      "#DC2626",
+		PasswordMaskChar:       "*",
+		PasswordIgnorePatterns: []string{},
 	}
 
 	configPath, err := GetConfigPath()
@@ -168,6 +170,10 @@ func LoadConfig() (*Config, error) {
 				if len(runes) > 0 {
 					config.PasswordMaskChar = string(runes[0])
 				}
+			}
+		case "password_ignore_pattern":
+			if value != "" {
+				config.PasswordIgnorePatterns = append(config.PasswordIgnorePatterns, value)
 			}
 		}
 	}

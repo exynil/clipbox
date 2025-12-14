@@ -8,7 +8,7 @@ A powerful clipboard manager for Wayland with **rofi** integration, featuring mu
 
 ---
 
-<https://github.com/user-attachments/assets/1e803b4d-f63e-4608-9926-c295666de6cc>
+<https://github.com/user-attachments/assets/f07e9a18-24f6-4dbb-8eb4-cff41786c92b>
 
 ## Features
 

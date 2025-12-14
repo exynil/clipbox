@@ -107,7 +107,7 @@ func processTextContent(content []byte, cfg *config.Config) string {
 	text := strings.TrimSpace(string(content))
 
 	// Check if content is a password and masking is enabled
-	if cfg.MaskPasswords > 0 && detect.IsPassword(content) {
+	if cfg.MaskPasswords > 0 && detect.IsPassword(content, cfg.PasswordIgnorePatterns) {
 		text = utils.Trunc(text, cfg.PreviewWidth, "…")
 		return MaskPassword(text, cfg.MaskPasswords, cfg.PasswordMaskColor, cfg.PasswordMaskChar)
 	}
